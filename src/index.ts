@@ -23,6 +23,12 @@ export * from './services';
 // GCP Integrations
 export * from './integrations';
 
+// Security utilities
+export * from './security';
+
+// Performance utilities
+export * from './performance';
+
 // Convenience function to start the swarm
 export async function startMarketingSwarm(
   config?: import('./swarm').SwarmConfig

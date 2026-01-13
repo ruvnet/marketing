@@ -86,6 +86,16 @@ function createLogger(baseLogger: pino.Logger): Logger {
 export const logger = createLogger(pinoLogger);
 
 /**
+ * Create a named logger
+ */
+export function createNamedLogger(name: string): Logger {
+  return logger.child({ component: name });
+}
+
+// Export createLogger as an alias for createNamedLogger
+export { createNamedLogger as createLogger };
+
+/**
  * Create a logger for a specific agent
  */
 export function createAgentLogger(agentId: AgentId): Logger {

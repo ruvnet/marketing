@@ -455,7 +455,7 @@ export class QualityAgent extends BaseAgent<QualityInput, QualityOutput> {
 
     return {
       action: 'score_truth',
-      result: { truthScore },
+      result: { valid: true, truthScore },
     };
   }
 
@@ -507,7 +507,7 @@ export class QualityAgent extends BaseAgent<QualityInput, QualityOutput> {
 
     return {
       action: 'check_consistency',
-      result: { consistencyReport },
+      result: { valid: consistencyReport.consistent, consistencyReport },
     };
   }
 

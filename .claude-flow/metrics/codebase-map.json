@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-01-21T01:19:49.583Z",
+  "projectRoot": "/home/user/marketing",
+  "structure": {
+    "hasPackageJson": true,
+    "hasTsConfig": true,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1768958389584
+}

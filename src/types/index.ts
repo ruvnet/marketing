@@ -27,8 +27,8 @@ export type AgentId =
   | 'mutation'
   // Tier 4: Attribution
   | 'counterfactual'
-  | 'causal-graph-builder'
-  | 'incrementality-auditor'
+  | 'causal-graph'
+  | 'incrementality'
   // Tier 5: Operations
   | 'account-health'
   | 'cross-platform';
@@ -78,7 +78,21 @@ export interface AgentState {
 // ============================================================================
 
 export type TaskStatus = 'pending' | 'assigned' | 'processing' | 'completed' | 'failed' | 'cancelled';
-export type TaskPriority = 'critical' | 'high' | 'normal' | 'low';
+export type TaskPriority = 'critical' | 'high' | 'medium' | 'normal' | 'low';
+
+// Task type enum for routing
+export type TaskType =
+  | 'campaign_optimization'
+  | 'creative_generation'
+  | 'creative_mutation'
+  | 'attribution_analysis'
+  | 'simulation'
+  | 'risk_assessment'
+  | 'fatigue_prediction'
+  | 'bid_optimization'
+  | 'budget_allocation'
+  | 'audience_analysis'
+  | (string & {});
 
 export interface TaskContext {
   campaignId?: string;
@@ -95,17 +109,19 @@ export interface Task<TInput = unknown, TOutput = unknown> {
   type: string;
   priority: TaskPriority;
   status: TaskStatus;
-  input: TInput;
+  payload: TInput;          // Primary field
+  input?: TInput;           // Alias for backwards compatibility
   output?: TOutput;
   error?: string;
   assignedTo?: AgentId;
-  context: TaskContext;
+  context?: TaskContext;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   startedAt?: Date;
   completedAt?: Date;
-  retryCount: number;
-  maxRetries: number;
+  retryCount?: number;
+  maxRetries?: number;
 }
 
 export interface TaskResult<T = unknown> {
@@ -122,9 +138,11 @@ export interface TaskResult<T = unknown> {
 // Event System Types
 // ============================================================================
 
+// Allow specific event types plus wildcards and custom events
 export type EventType =
   // Swarm Events
   | 'swarm.initialized'
+  | 'swarm.started'
   | 'swarm.shutdown'
   | 'agent.joined'
   | 'agent.left'
@@ -151,23 +169,38 @@ export type EventType =
   | 'attribution.path_discovered'
   | 'attribution.value_computed'
   | 'attribution.counterfactual_analyzed'
+  | 'attribution.touchpoint_recorded'
+  | 'attribution.conversion_recorded'
+  // Analytics Events
+  | 'analytics.metrics_recorded'
   // Intelligence Events
   | 'intelligence.pattern_detected'
   | 'intelligence.prediction_generated'
-  | 'intelligence.risk_identified';
+  | 'intelligence.risk_identified'
+  // Memory Events
+  | 'memory.updated'
+  | 'memory.retrieved'
+  // Quality Events
+  | 'quality.passed'
+  | 'quality.failed'
+  // Wildcard support (for subscriptions)
+  | '*'
+  // Allow any string for flexibility
+  | (string & {});
 
 export interface DomainEvent<T = unknown> {
   id: string;
-  type: EventType;
-  aggregateId: string;
-  aggregateType: string;
+  type: EventType | string;
+  timestamp: Date;
+  source: string;
   payload: T;
-  metadata: {
-    correlationId: string;
+  aggregateId?: string;
+  aggregateType?: string;
+  metadata?: {
+    correlationId?: string;
     causationId?: string;
     userId?: string;
-    timestamp: Date;
-    version: number;
+    version?: number;
   };
 }
 
@@ -176,18 +209,25 @@ export interface DomainEvent<T = unknown> {
 // ============================================================================
 
 export type Platform = 'google_ads' | 'meta' | 'tiktok' | 'linkedin';
+export type CampaignStatus = 'draft' | 'active' | 'paused' | 'ended';
 
 export interface Campaign {
   id: string;
   name: string;
   platform: Platform;
   accountId: string;
-  status: 'active' | 'paused' | 'ended';
+  status: CampaignStatus;
   budget: Budget;
+  spent?: number;               // Direct spend accessor for convenience
+  dailyBudget?: number;         // Direct daily budget accessor
   bidding: BiddingStrategy;
   targeting: TargetingConfig;
   creatives: string[];
+  creativeIds?: string[];       // Alias for creatives
   metrics: CampaignMetrics;
+  targetAudience?: AudienceSegment;
+  startDate?: Date;
+  endDate?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -262,16 +302,30 @@ export interface CampaignMetrics {
 // Creative Types
 // ============================================================================
 
+export type CreativeType = 'image' | 'video' | 'carousel' | 'text' | 'responsive';
+
+export interface CreativeContent {
+  headline?: string;
+  body?: string;
+  description?: string;
+  cta?: string;
+  url?: string;
+}
+
 export interface Creative {
   id: string;
   campaignId: string;
-  type: 'image' | 'video' | 'carousel' | 'text' | 'responsive';
+  type: CreativeType;
   name: string;
+  platform?: Platform;
   status: 'draft' | 'active' | 'fatigued' | 'retired';
+  content?: CreativeContent;
   genome?: CreativeGenome;
   assets: CreativeAsset[];
   metrics: CreativeMetrics;
+  performance?: CreativeMetrics;  // Alias for metrics
   lineage?: CreativeLineage;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -338,6 +392,8 @@ export interface CreativeMetrics {
   impressions: number;
   clicks: number;
   conversions: number;
+  spend?: number;
+  revenue?: number;
   ctr: number;
   cvr: number;
   engagementRate: number;
@@ -382,11 +438,16 @@ export interface Touchpoint {
   campaignId: string;
   creativeId?: string;
   timestamp: Date;
-  type: 'impression' | 'click' | 'view' | 'engagement';
+  type: 'impression' | 'click' | 'view' | 'engagement' | 'conversion';
   position: number;
   attributedValue: number;
   shapleyValue?: number;
+  platform: Platform;
+  userId: string;
 }
+
+// Alias for backwards compatibility
+export type Attribution = AttributionPath;
 
 export type AttributionModel =
   | 'last_click'

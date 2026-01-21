@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { EventBus, getEventBus } from '../core/event-bus';
 import { StateManager, getStateManager } from '../core/state-manager';
 import { createLogger, Logger } from '../core/logger';
-import { Attribution, Platform, TouchPoint } from '../types';
+import { Attribution, Platform, Touchpoint } from '../types';
 
 export interface AttributionModel {
   type: 'first_touch' | 'last_touch' | 'linear' | 'time_decay' | 'position_based' | 'data_driven';
@@ -16,7 +16,7 @@ export interface AttributionModel {
 
 export interface ConversionPath {
   conversionId: string;
-  touchpoints: TouchPoint[];
+  touchpoints: Touchpoint[];
   value: number;
   timestamp: Date;
 }
@@ -63,7 +63,7 @@ export class AttributionService {
   /**
    * Record a touchpoint
    */
-  recordTouchpoint(touchpoint: TouchPoint): void {
+  recordTouchpoint(touchpoint: Touchpoint): void {
     const path = this.conversionPaths.get(touchpoint.userId) || {
       conversionId: '',
       touchpoints: [],
@@ -154,7 +154,7 @@ export class AttributionService {
    * Distribute credit based on attribution model
    */
   private distributeCredit(
-    touchpoints: TouchPoint[],
+    touchpoints: Touchpoint[],
     model: AttributionModel
   ): Map<string, number> {
     const credits = new Map<string, number>();
@@ -222,7 +222,7 @@ export class AttributionService {
   /**
    * Add credit to a touchpoint
    */
-  private addCredit(credits: Map<string, number>, tp: TouchPoint, credit: number): void {
+  private addCredit(credits: Map<string, number>, tp: Touchpoint, credit: number): void {
     const key = `${tp.campaignId}|${tp.platform}`;
     credits.set(key, (credits.get(key) || 0) + credit);
   }
@@ -230,7 +230,7 @@ export class AttributionService {
   /**
    * Calculate engagement score for a touchpoint
    */
-  private calculateEngagement(tp: TouchPoint): number {
+  private calculateEngagement(tp: Touchpoint): number {
     const typeWeights: Record<string, number> = {
       impression: 0.1,
       click: 0.3,

@@ -69,20 +69,22 @@ export interface AuditFilter {
  */
 export class ConsoleAuditSink implements AuditLogSink {
   async write(event: AuditEvent): Promise<void> {
-    const logFn = event.severity === 'critical' || event.severity === 'error'
-      ? logger.error.bind(logger)
-      : event.severity === 'warning'
-        ? logger.warn.bind(logger)
-        : logger.info.bind(logger);
-
-    logFn('Audit event', {
+    const context = {
       auditId: event.id,
       type: event.type,
       action: event.action,
       actor: `${event.actor.type}:${event.actor.id}`,
       resource: `${event.resource.type}:${event.resource.id}`,
       outcome: event.outcome,
-    });
+    };
+
+    if (event.severity === 'critical' || event.severity === 'error') {
+      logger.error('Audit event', undefined, context);
+    } else if (event.severity === 'warning') {
+      logger.warn('Audit event', context);
+    } else {
+      logger.info('Audit event', context);
+    }
   }
 }
 

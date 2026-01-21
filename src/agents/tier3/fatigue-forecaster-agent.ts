@@ -424,7 +424,7 @@ export class FatigueForecasterAgent extends BaseAgent<FatigueInput, FatigueOutpu
     }
 
     // Check CPA increase
-    const cpa = metrics.spend / Math.max(metrics.conversions, 1);
+    const cpa = (metrics.spend ?? 0) / Math.max(metrics.conversions, 1);
     if (cpa > baselineCpa * 1.3) {
       signals.push({
         type: 'cpa_increase',

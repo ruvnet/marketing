@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { EventBus, getEventBus } from '../core/event-bus';
 import { StateManager, getStateManager } from '../core/state-manager';
 import { createLogger, Logger } from '../core/logger';
-import { Creative, CreativeType, Platform } from '../types';
+import { Creative, CreativeType, CreativeMetrics, Platform } from '../types';
 
 export interface CreativeCreateInput {
   name: string;
@@ -58,20 +58,34 @@ export class CreativeService {
    * Create a new creative asset
    */
   async createCreative(input: CreativeCreateInput): Promise<Creative> {
+    const metrics: CreativeMetrics = {
+      impressions: 0,
+      clicks: 0,
+      conversions: 0,
+      ctr: 0,
+      cvr: 0,
+      engagementRate: 0,
+      fatigueScore: 0,
+      qualityScore: 0,
+      timestamp: new Date(),
+    };
+
     const creative: Creative = {
       id: uuidv4(),
+      campaignId: '',
       name: input.name,
       type: input.type,
       platform: input.platform,
       status: 'draft',
-      content: input.content,
-      performance: {
-        impressions: 0,
-        clicks: 0,
-        conversions: 0,
-        ctr: 0,
-        conversionRate: 0,
+      content: {
+        headline: input.content.headline,
+        body: input.content.body,
+        cta: input.content.callToAction,
+        url: input.content.imageUrl || input.content.videoUrl,
       },
+      assets: [],
+      metrics,
+      performance: metrics,
       metadata: input.metadata || {},
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -149,11 +163,11 @@ export class CreativeService {
    * Analyze creative performance
    */
   analyzePerformance(creative: Creative): CreativePerformance {
-    const { performance } = creative;
+    const performance = creative.performance ?? creative.metrics;
 
     // Calculate engagement score (0-100)
     const ctrScore = Math.min(performance.ctr * 100, 30); // Max 30 points
-    const conversionScore = Math.min(performance.conversionRate * 200, 40); // Max 40 points
+    const conversionScore = Math.min(performance.cvr * 200, 40); // Max 40 points
     const volumeScore = Math.min(Math.log10(performance.impressions + 1) * 5, 30); // Max 30 points
     const engagementScore = ctrScore + conversionScore + volumeScore;
 
@@ -184,7 +198,7 @@ export class CreativeService {
       clicks: performance.clicks,
       conversions: performance.conversions,
       ctr: performance.ctr,
-      conversionRate: performance.conversionRate,
+      conversionRate: performance.cvr,
       engagementScore,
       fatigueLevel,
       recommendedAction,
@@ -230,8 +244,12 @@ export class CreativeService {
     const input: CreativeCreateInput = {
       name: modifications?.name || `${original.name} (Copy)`,
       type: modifications?.type || original.type,
-      platform: modifications?.platform || original.platform,
-      content: modifications?.content || original.content,
+      platform: modifications?.platform || original.platform!,
+      content: modifications?.content || {
+        headline: original.content?.headline,
+        body: original.content?.body,
+        callToAction: original.content?.cta,
+      },
       metadata: {
         ...original.metadata,
         ...modifications?.metadata,
@@ -251,7 +269,8 @@ export class CreativeService {
       return [];
     }
 
-    return campaign.creativeIds
+    const creativeIds = campaign.creativeIds ?? campaign.creatives ?? [];
+    return creativeIds
       .map((id) => this.stateManager.getCreative(id))
       .filter((c): c is Creative => c !== undefined);
   }
@@ -279,15 +298,15 @@ export class CreativeService {
     switch (mutationType) {
       case 'headline':
         return {
-          headline: this.mutateText(creative.content.headline || '', 'headline'),
+          headline: this.mutateText(creative.content?.headline || '', 'headline'),
         };
       case 'body':
         return {
-          body: this.mutateText(creative.content.body || '', 'body'),
+          body: this.mutateText(creative.content?.body || '', 'body'),
         };
       case 'cta':
         return {
-          callToAction: this.generateAlternativeCTA(creative.content.callToAction || ''),
+          cta: this.generateAlternativeCTA(creative.content?.cta || ''),
         };
       case 'visual':
         return {
@@ -296,9 +315,9 @@ export class CreativeService {
         };
       case 'full':
         return {
-          headline: this.mutateText(creative.content.headline || '', 'headline'),
-          body: this.mutateText(creative.content.body || '', 'body'),
-          callToAction: this.generateAlternativeCTA(creative.content.callToAction || ''),
+          headline: this.mutateText(creative.content?.headline || '', 'headline'),
+          body: this.mutateText(creative.content?.body || '', 'body'),
+          cta: this.generateAlternativeCTA(creative.content?.cta || ''),
         };
       default:
         return {};

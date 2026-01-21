@@ -152,7 +152,7 @@ export class SwarmCoordinator extends EventEmitter {
       });
     } catch (error) {
       this.status = 'error';
-      this.logger.error('Failed to start swarm', { error });
+      this.logger.error('Failed to start swarm', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -183,7 +183,7 @@ export class SwarmCoordinator extends EventEmitter {
           await agent.shutdown();
           this.logger.debug(`Agent ${agentId} shutdown complete`);
         } catch (error) {
-          this.logger.error(`Error shutting down agent ${agentId}`, { error });
+          this.logger.error(`Error shutting down agent ${agentId}`, error instanceof Error ? error : new Error(String(error)));
         }
       }
     }
@@ -284,13 +284,14 @@ export class SwarmCoordinator extends EventEmitter {
     const agentStatuses = new Map<AgentId, AgentStatus>();
 
     for (const [id, agent] of this.agents) {
+      const state = agent.getState();
       agentStatuses.set(id, {
         id,
-        status: agent.getStatus(),
-        queueLength: agent.getQueueLength(),
-        tasksProcessed: agent.getTasksProcessed(),
-        lastActivity: agent.getLastActivity(),
-        errorCount: agent.getErrorCount(),
+        status: this.mapAgentStatus(state.status),
+        queueLength: agent.getQueueDepth(),
+        tasksProcessed: state.metrics.tasksProcessed,
+        lastActivity: state.metrics.lastActive,
+        errorCount: state.metrics.successRate < 1 ? Math.round((1 - state.metrics.successRate) * state.metrics.tasksProcessed) : 0,
       });
     }
 
@@ -329,8 +330,13 @@ export class SwarmCoordinator extends EventEmitter {
 
     for (const [id, agent] of this.agents) {
       try {
-        const result = await agent.healthCheck();
-        diagnostics.set(id, result);
+        const state = agent.getState();
+        diagnostics.set(id, {
+          healthy: state.status !== 'error' && state.status !== 'offline',
+          status: state.status,
+          metrics: state.metrics,
+          lastError: state.lastError,
+        });
       } catch (error) {
         diagnostics.set(id, { error: String(error), healthy: false });
       }
@@ -340,93 +346,112 @@ export class SwarmCoordinator extends EventEmitter {
   }
 
   /**
+   * Map BaseAgent status to local AgentStatus type
+   */
+  private mapAgentStatus(status: import('../types').AgentStatus): 'initializing' | 'running' | 'stopped' | 'error' {
+    switch (status) {
+      case 'idle':
+      case 'processing':
+        return 'running';
+      case 'error':
+        return 'error';
+      case 'offline':
+        return 'stopped';
+      default:
+        return 'running';
+    }
+  }
+
+  /**
    * Initialize all 15 agents in dependency order
    */
   private async initializeAgents(): Promise<void> {
     const enabledAgents = this.config.enabledAgents;
 
+    const deps = { eventBus: this.eventBus, stateManager: this.stateManager };
+
     // Tier 1: Core Coordination (no dependencies)
     await this.initializeAgent(
       'orchestrator',
-      () => new OrchestratorAgent(this.eventBus, this.stateManager),
+      () => new OrchestratorAgent(deps),
       enabledAgents
     );
     await this.initializeAgent(
       'memory',
-      () => new MemoryAgent(this.eventBus, this.stateManager),
+      () => new MemoryAgent(deps),
       enabledAgents
     );
     await this.initializeAgent(
       'quality',
-      () => new QualityAgent(this.eventBus, this.stateManager),
+      () => new QualityAgent(deps),
       enabledAgents
     );
 
     // Tier 2: Intelligence Layer (depends on Tier 1)
     await this.initializeAgent(
       'simulation',
-      () => new SimulationAgent(this.eventBus, this.stateManager),
+      () => new SimulationAgent(deps),
       enabledAgents
     );
     await this.initializeAgent(
       'historical-memory',
-      () => new HistoricalMemoryAgent(this.eventBus, this.stateManager),
+      () => new HistoricalMemoryAgent(deps),
       enabledAgents
     );
     await this.initializeAgent(
       'risk-detection',
-      () => new RiskDetectionAgent(this.eventBus, this.stateManager),
+      () => new RiskDetectionAgent(deps),
       enabledAgents
     );
     await this.initializeAgent(
       'attention-arbitrage',
-      () => new AttentionArbitrageAgent(this.eventBus, this.stateManager),
+      () => new AttentionArbitrageAgent(deps),
       enabledAgents
     );
 
     // Tier 3: Creative Intelligence (depends on Tier 1, 2)
     await this.initializeAgent(
       'creative-genome',
-      () => new CreativeGenomeAgent(this.eventBus, this.stateManager),
+      () => new CreativeGenomeAgent(deps),
       enabledAgents
     );
     await this.initializeAgent(
       'fatigue-forecaster',
-      () => new FatigueForecasterAgent(this.eventBus, this.stateManager),
+      () => new FatigueForecasterAgent(deps),
       enabledAgents
     );
     await this.initializeAgent(
       'mutation',
-      () => new MutationAgent(this.eventBus, this.stateManager),
+      () => new MutationAgent(deps),
       enabledAgents
     );
 
     // Tier 4: Attribution & Causality (depends on Tier 1, 2, 3)
     await this.initializeAgent(
       'counterfactual',
-      () => new CounterfactualAgent(this.eventBus, this.stateManager),
+      () => new CounterfactualAgent(deps),
       enabledAgents
     );
     await this.initializeAgent(
       'causal-graph',
-      () => new CausalGraphBuilderAgent(this.eventBus, this.stateManager),
+      () => new CausalGraphBuilderAgent(deps),
       enabledAgents
     );
     await this.initializeAgent(
       'incrementality',
-      () => new IncrementalityAuditorAgent(this.eventBus, this.stateManager),
+      () => new IncrementalityAuditorAgent(deps),
       enabledAgents
     );
 
     // Tier 5: Operations (depends on all other tiers)
     await this.initializeAgent(
       'account-health',
-      () => new AccountHealthAgent(this.eventBus, this.stateManager),
+      () => new AccountHealthAgent(deps),
       enabledAgents
     );
     await this.initializeAgent(
       'cross-platform',
-      () => new CrossPlatformAgent(this.eventBus, this.stateManager),
+      () => new CrossPlatformAgent(deps),
       enabledAgents
     );
 
@@ -451,21 +476,10 @@ export class SwarmCoordinator extends EventEmitter {
       const agent = factory();
       await agent.initialize();
       this.agents.set(agentId, agent);
-      this.stateManager.registerAgent(agentId, {
-        id: agentId,
-        status: 'running',
-        capabilities: [],
-        tier: this.getAgentTier(agentId),
-        lastHeartbeat: new Date(),
-        metrics: {
-          tasksProcessed: 0,
-          averageResponseTime: 0,
-          errorRate: 0,
-        },
-      });
+      this.stateManager.registerAgent(agent.getState());
       this.logger.debug(`Agent ${agentId} initialized`);
     } catch (error) {
-      this.logger.error(`Failed to initialize agent ${agentId}`, { error });
+      this.logger.error(`Failed to initialize agent ${agentId}`, error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -502,7 +516,8 @@ export class SwarmCoordinator extends EventEmitter {
     this.eventBus.subscribe('task.*', (event: DomainEvent) => {
       if (event.type === 'task.completed') {
         this.metrics.totalTasksCompleted++;
-        this.updateAverageTaskDuration(event.payload?.duration as number);
+        const payload = event.payload as { duration?: number } | undefined;
+        this.updateAverageTaskDuration(payload?.duration ?? 0);
       } else if (event.type === 'task.failed') {
         this.metrics.totalTasksFailed++;
         this.updateErrorRate();
@@ -533,12 +548,13 @@ export class SwarmCoordinator extends EventEmitter {
    */
   private async performHealthCheck(): Promise<void> {
     let healthyCount = 0;
-    let unhealthyAgents: AgentId[] = [];
+    const unhealthyAgents: AgentId[] = [];
 
     for (const [id, agent] of this.agents) {
       try {
-        const result = await agent.healthCheck();
-        if (result.healthy) {
+        const state = agent.getState();
+        const isHealthy = state.status !== 'error' && state.status !== 'offline';
+        if (isHealthy) {
           healthyCount++;
         } else {
           unhealthyAgents.push(id);
@@ -553,10 +569,10 @@ export class SwarmCoordinator extends EventEmitter {
       this.status = 'running';
     } else if (unhealthyAgents.length < this.agents.size / 2) {
       this.status = 'degraded';
-      this.logger.warn('Swarm operating in degraded mode', { unhealthyAgents });
+      this.logger.warn(`Swarm operating in degraded mode. Unhealthy agents: ${unhealthyAgents.join(', ')}`);
     } else {
       this.status = 'error';
-      this.logger.error('Swarm in error state', { unhealthyAgents });
+      this.logger.error(`Swarm in error state. Unhealthy agents: ${unhealthyAgents.join(', ')}`);
     }
 
     this.emit('swarm:healthcheck', {
@@ -583,7 +599,7 @@ export class SwarmCoordinator extends EventEmitter {
           this.logger.info(`Agent ${agentId} recovered successfully`);
         }
       } catch (error) {
-        this.logger.error(`Failed to recover agent: ${agentId}`, { error });
+        this.logger.error(`Failed to recover agent: ${agentId}`, error instanceof Error ? error : new Error(String(error)));
       }
     }
   }

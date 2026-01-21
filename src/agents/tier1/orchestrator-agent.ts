@@ -120,8 +120,8 @@ const AGENT_CAPABILITIES: Record<AgentId, string[]> = {
   mutation: ['creative_variation', 'genetic_mutation', 'ab_generation'],
   // Tier 4
   counterfactual: ['what_if_analysis', 'counterfactual_simulation', 'impact_estimation'],
-  'causal-graph-builder': ['causal_mapping', 'influence_graph', 'path_analysis'],
-  'incrementality-auditor': ['lift_measurement', 'holdout_analysis', 'incrementality_test'],
+  'causal-graph': ['causal_mapping', 'influence_graph', 'path_analysis'],
+  'incrementality': ['lift_measurement', 'holdout_analysis', 'incrementality_test'],
   // Tier 5
   'account-health': ['self_healing', 'health_monitoring', 'auto_recovery'],
   'cross-platform': ['multi_channel', 'platform_sync', 'cross_platform_intelligence'],

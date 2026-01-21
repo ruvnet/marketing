@@ -11,8 +11,18 @@ import {
   Campaign,
   CampaignStatus,
   Platform,
-  BudgetAllocation,
+  Budget,
+  TargetingConfig,
+  BiddingStrategy,
 } from '../types';
+
+export interface CampaignBudgetAllocation {
+  campaignId: string;
+  platform: Platform;
+  allocatedBudget: number;
+  percentage: number;
+  rationale: string;
+}
 
 export interface CampaignCreateInput {
   name: string;
@@ -56,27 +66,59 @@ export class CampaignService {
    * Create a new campaign
    */
   async createCampaign(input: CampaignCreateInput): Promise<Campaign> {
+    const budget: Budget = {
+      daily: input.dailyBudget,
+      total: input.budget,
+      spent: 0,
+      currency: 'USD',
+      allocation: [],
+    };
+
+    const targeting: TargetingConfig = {
+      audiences: input.targetAudience.map((name, idx) => ({
+        id: `audience-${idx}`,
+        name,
+        type: 'custom' as const,
+        size: 0,
+      })),
+      locations: [],
+      languages: ['en'],
+      devices: ['desktop', 'mobile', 'tablet'],
+      schedules: [],
+      exclusions: [],
+    };
+
+    const bidding: BiddingStrategy = {
+      type: 'maximize_conversions',
+      adjustments: [],
+    };
+
     const campaign: Campaign = {
       id: uuidv4(),
       name: input.name,
       platform: input.platform,
+      accountId: 'default-account',
       status: 'draft',
-      budget: input.budget,
+      budget,
       dailyBudget: input.dailyBudget,
       spent: 0,
+      bidding,
+      targeting,
+      creatives: input.creativeIds || [],
+      creativeIds: input.creativeIds || [],
       startDate: input.startDate,
       endDate: input.endDate,
-      targetAudience: input.targetAudience,
-      objectives: input.objectives,
-      creativeIds: input.creativeIds || [],
       metrics: {
         impressions: 0,
         clicks: 0,
         conversions: 0,
+        spend: 0,
+        revenue: 0,
         ctr: 0,
         cpc: 0,
         cpa: 0,
         roas: 0,
+        timestamp: new Date(),
       },
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -160,8 +202,8 @@ export class CampaignService {
       throw new Error(`Campaign not found: ${campaignId}`);
     }
 
-    const previousBudget = campaign.budget;
-    campaign.budget = budget;
+    const previousBudget = campaign.budget.total;
+    campaign.budget.total = budget;
     if (dailyBudget !== undefined) {
       campaign.dailyBudget = dailyBudget;
     }
@@ -202,7 +244,7 @@ export class CampaignService {
       });
     }
 
-    if (campaign.metrics.cpa > campaign.budget * 0.1) {
+    if (campaign.metrics.cpa > campaign.budget.total * 0.1) {
       recommendations.push({
         type: 'targeting',
         action: 'Narrow audience targeting to high-intent segments',
@@ -212,7 +254,8 @@ export class CampaignService {
       });
     }
 
-    const budgetUtilization = campaign.spent / campaign.budget;
+    const spent = campaign.spent ?? campaign.budget.spent ?? 0;
+    const budgetUtilization = campaign.budget.total > 0 ? spent / campaign.budget.total : 0;
     if (budgetUtilization < 0.5 && campaign.status === 'active') {
       recommendations.push({
         type: 'bidding',
@@ -237,7 +280,7 @@ export class CampaignService {
   calculateBudgetAllocation(
     campaigns: Campaign[],
     totalBudget: number
-  ): BudgetAllocation[] {
+  ): CampaignBudgetAllocation[] {
     // Score campaigns by performance
     const scores = campaigns.map((campaign) => {
       let score = 0;
@@ -255,7 +298,8 @@ export class CampaignService {
       score += campaign.metrics.ctr * 10 * 0.2;
 
       // Budget efficiency
-      const efficiency = campaign.budget > 0 ? campaign.spent / campaign.budget : 0;
+      const spent = campaign.spent ?? campaign.budget.spent ?? 0;
+      const efficiency = campaign.budget.total > 0 ? spent / campaign.budget.total : 0;
       score += efficiency * 0.1;
 
       return { campaign, score };
@@ -278,19 +322,17 @@ export class CampaignService {
   private validateForActivation(campaign: Campaign): void {
     const errors: string[] = [];
 
-    if (!campaign.budget || campaign.budget <= 0) {
+    if (!campaign.budget || campaign.budget.total <= 0) {
       errors.push('Campaign must have a positive budget');
     }
 
     if (!campaign.startDate || !campaign.endDate) {
       errors.push('Campaign must have start and end dates');
-    }
-
-    if (campaign.startDate > campaign.endDate) {
+    } else if (campaign.startDate > campaign.endDate) {
       errors.push('Start date must be before end date');
     }
 
-    if (!campaign.targetAudience || campaign.targetAudience.length === 0) {
+    if (!campaign.targeting || campaign.targeting.audiences.length === 0) {
       errors.push('Campaign must have at least one target audience');
     }
 

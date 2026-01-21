@@ -298,7 +298,7 @@ export class PubSubClient extends EventEmitter {
         for (const handler of handlers) {
           message.ackId = `ack_${message.id}`;
           handler(message).catch((error) => {
-            this.logger.error('Handler error', { subscription: subName, error });
+            this.logger.error(`Handler error for subscription ${subName}`, error instanceof Error ? error : new Error(String(error)));
           });
         }
       }

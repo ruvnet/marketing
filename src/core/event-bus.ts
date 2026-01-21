@@ -140,6 +140,8 @@ export class EventBus {
     const event: DomainEvent<T> = {
       id: uuidv4(),
       type,
+      timestamp: new Date(),
+      source: aggregateType,
       aggregateId,
       aggregateType,
       payload,
@@ -147,7 +149,6 @@ export class EventBus {
         correlationId: metadata?.correlationId ?? uuidv4(),
         causationId: metadata?.causationId,
         userId: metadata?.userId,
-        timestamp: new Date(),
         version: metadata?.version ?? 1,
       },
     };
@@ -180,7 +181,7 @@ export class EventBus {
     }
 
     const events = this.eventHistory.filter(
-      (e) => e.metadata.timestamp >= since
+      (e) => e.timestamp >= since
     );
 
     for (const event of events) {
@@ -276,9 +277,10 @@ export class EventBus {
    * Store event by aggregate
    */
   private storeByAggregate(event: DomainEvent): void {
-    const events = this.eventStore.get(event.aggregateId) ?? [];
+    const aggregateId = event.aggregateId ?? event.id;
+    const events = this.eventStore.get(aggregateId) ?? [];
     events.push(event);
-    this.eventStore.set(event.aggregateId, events);
+    this.eventStore.set(aggregateId, events);
   }
 
   /**

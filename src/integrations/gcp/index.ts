@@ -2,6 +2,12 @@
  * Google Cloud Platform Integration Exports
  */
 
+// Import factory functions for local use in createGCPClients
+import { createBigQueryClient } from './bigquery-client';
+import { createPubSubClient } from './pubsub-client';
+import { createStorageClient } from './storage-client';
+import { createVertexAIClient } from './vertex-ai-client';
+
 export {
   BigQueryClient,
   BigQueryConfig,

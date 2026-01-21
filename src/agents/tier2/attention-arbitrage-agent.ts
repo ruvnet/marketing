@@ -293,8 +293,9 @@ export class AttentionArbitrageAgent extends BaseAgent<ArbitrageInput, Arbitrage
       throw new Error('Segment and platform are required for analysis');
     }
 
+    const segment = input.segment;
     const marketData = MARKET_DATA.find(
-      (d) => d.platform === input.platform && d.segment === input.segment.type
+      (d) => d.platform === input.platform && d.segment === segment.type
     ) ?? {
       platform: input.platform,
       segment: input.segment.type,

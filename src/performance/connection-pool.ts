@@ -277,7 +277,7 @@ export class ConnectionPool<T> extends EventEmitter {
       this.emit('connection:destroyed', { id: conn.id });
       logger.debug('Connection destroyed', { connectionId: conn.id });
     } catch (error) {
-      logger.error('Error destroying connection', { connectionId: conn.id, error });
+      logger.error(`Error destroying connection ${conn.id}`, error instanceof Error ? error : new Error(String(error)));
     }
   }
 

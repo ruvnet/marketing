@@ -100,7 +100,7 @@ export interface AttributionResult {
 // ============================================================================
 
 export const causalGraphBuilderConfig: AgentConfig = {
-  id: 'causal-graph-builder',
+  id: 'causal-graph',
   tier: 4,
   name: 'Causal Graph Builder Agent',
   description: 'Build causal influence graphs for attribution',

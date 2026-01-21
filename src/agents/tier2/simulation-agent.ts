@@ -527,13 +527,18 @@ export class SimulationAgent extends BaseAgent<SimulationInput, SimulationOutput
     // Extract optimal config from variation
     const optimalVariation = variations.find((v) => v.id === optimal.variationId)!;
 
+    const optimalDailyBudget = (optimalVariation.changes.dailyBudget as number) ?? campaign.budget.daily;
+    const optimalBidAmount = (optimalVariation.changes.bidAmount as number) ?? campaign.bidding.targetValue ?? 1;
+
     const optimalConfig: OptimalConfiguration = {
-      dailyBudget: (optimalVariation.changes.dailyBudget as number) ?? campaign.budget.daily,
-      bidAmount: (optimalVariation.changes.bidAmount as number) ?? campaign.bidding.targetValue ?? 1,
+      dailyBudget: optimalDailyBudget,
+      bidAmount: optimalBidAmount,
       expectedRoas: optimal.metrics.expectedRoas,
       confidence: optimal.probability,
-      tradeoffs: this.generateTradeoffs(campaign, optimalConfig!, optimal),
+      tradeoffs: [],
     };
+
+    optimalConfig.tradeoffs = this.generateTradeoffs(campaign, optimalConfig, optimal);
 
     return {
       action: 'optimize',

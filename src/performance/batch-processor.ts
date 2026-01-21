@@ -148,7 +148,7 @@ export class AutoBatcher<T, R> extends EventEmitter {
       }
 
       this.emit('batch:completed', { size: batch.length, success: false, error });
-      logger.error('Batch processing failed', { batchSize: batch.length, error });
+      logger.error(`Batch processing failed (size: ${batch.length})`, error instanceof Error ? error : new Error(String(error)));
     }
   }
 }
@@ -315,7 +315,7 @@ export class DebouncedBatcher<T, R> {
         resolve(results);
       }
     } catch (error) {
-      logger.error('Debounced batch processing failed', { error });
+      logger.error('Debounced batch processing failed', error instanceof Error ? error : new Error(String(error)));
     }
   }
 }

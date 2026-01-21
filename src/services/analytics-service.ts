@@ -112,8 +112,8 @@ export class AnalyticsService {
       type: 'campaign',
       entityId: campaignId,
       period: {
-        start: campaign.startDate,
-        end: campaign.endDate,
+        start: campaign.startDate ?? new Date(),
+        end: campaign.endDate ?? new Date(),
       },
       metrics: currentMetrics,
       trends,
@@ -126,8 +126,9 @@ export class AnalyticsService {
    * Generate cross-platform report
    */
   generatePlatformReport(platform: Platform): PerformanceReport {
-    const campaigns = Array.from(this.stateManager.getSnapshot().campaigns.values())
-      .filter((c) => c.platform === platform);
+    const state = this.stateManager.getState();
+    const campaigns = Array.from(state.campaigns.values())
+      .filter((c: Campaign) => c.platform === platform);
 
     const aggregatedMetrics = this.aggregateMetrics(campaigns);
     const history = this.metricHistory.get(`platform:${platform}`) || [];
@@ -251,13 +252,14 @@ export class AnalyticsService {
    * Convert campaign to metric snapshot
    */
   private campaignToMetricSnapshot(campaign: Campaign): MetricSnapshot {
+    const spent = campaign.spent ?? campaign.budget.spent ?? 0;
     return {
       timestamp: new Date(),
       impressions: campaign.metrics.impressions,
       clicks: campaign.metrics.clicks,
       conversions: campaign.metrics.conversions,
-      spend: campaign.spent,
-      revenue: campaign.metrics.conversions * (campaign.metrics.roas * campaign.spent / Math.max(1, campaign.metrics.conversions)),
+      spend: spent,
+      revenue: campaign.metrics.conversions * (campaign.metrics.roas * spent / Math.max(1, campaign.metrics.conversions)),
       ctr: campaign.metrics.ctr,
       cpc: campaign.metrics.cpc,
       cpa: campaign.metrics.cpa,
@@ -270,13 +272,16 @@ export class AnalyticsService {
    */
   private aggregateMetrics(campaigns: Campaign[]): MetricSnapshot {
     const totals = campaigns.reduce(
-      (acc, c) => ({
-        impressions: acc.impressions + c.metrics.impressions,
-        clicks: acc.clicks + c.metrics.clicks,
-        conversions: acc.conversions + c.metrics.conversions,
-        spend: acc.spend + c.spent,
-        revenue: acc.revenue + (c.metrics.roas * c.spent),
-      }),
+      (acc, c) => {
+        const spent = c.spent ?? c.budget.spent ?? 0;
+        return {
+          impressions: acc.impressions + c.metrics.impressions,
+          clicks: acc.clicks + c.metrics.clicks,
+          conversions: acc.conversions + c.metrics.conversions,
+          spend: acc.spend + spent,
+          revenue: acc.revenue + (c.metrics.roas * spent),
+        };
+      },
       { impressions: 0, clicks: 0, conversions: 0, spend: 0, revenue: 0 }
     );
 
@@ -341,7 +346,9 @@ export class AnalyticsService {
     const insights: Insight[] = [];
 
     // Budget utilization
-    const utilization = campaign.spent / campaign.budget;
+    const spent = campaign.spent ?? campaign.budget.spent ?? 0;
+    const totalBudget = campaign.budget.total;
+    const utilization = totalBudget > 0 ? spent / totalBudget : 0;
     if (utilization < 0.3) {
       insights.push({
         type: 'warning',
@@ -415,12 +422,10 @@ export class AnalyticsService {
 
     // Platform-specific thresholds
     const thresholds: Record<Platform, { ctr: number; cpc: number }> = {
-      'google-ads': { ctr: 0.02, cpc: 2.0 },
-      'meta-ads': { ctr: 0.015, cpc: 1.5 },
-      'tiktok-ads': { ctr: 0.01, cpc: 0.5 },
-      'linkedin-ads': { ctr: 0.005, cpc: 5.0 },
-      'twitter-ads': { ctr: 0.01, cpc: 1.0 },
-      'amazon-ads': { ctr: 0.03, cpc: 1.0 },
+      'google_ads': { ctr: 0.02, cpc: 2.0 },
+      'meta': { ctr: 0.015, cpc: 1.5 },
+      'tiktok': { ctr: 0.01, cpc: 0.5 },
+      'linkedin': { ctr: 0.005, cpc: 5.0 },
     };
 
     const platformThreshold = thresholds[platform];

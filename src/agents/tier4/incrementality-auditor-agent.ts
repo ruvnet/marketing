@@ -114,7 +114,7 @@ export interface HoldoutRecommendation {
 // ============================================================================
 
 export const incrementalityAuditorConfig: AgentConfig = {
-  id: 'incrementality-auditor',
+  id: 'incrementality',
   tier: 4,
   name: 'Incrementality Auditor Agent',
   description: 'Measure true incremental lift and design holdout tests',

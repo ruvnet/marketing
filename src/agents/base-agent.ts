@@ -169,11 +169,13 @@ export abstract class BaseAgent<TInput = unknown, TOutput = unknown> {
           task.id,
           'task',
           { taskId: task.id, agentId: this.id },
-          { correlationId: task.context.correlationId }
+          { correlationId: task.context?.correlationId }
         );
 
-        // Execute the task
-        const result = await this.process(task.input, task.context);
+        // Execute the task - use payload (primary) or input (alias)
+        const taskInput = task.payload ?? task.input;
+        const taskContext = task.context ?? { correlationId: task.id, metadata: {} };
+        const result = await this.process(taskInput as TInput, taskContext);
 
         // Update metrics
         this.updateMetrics(timer(), true);
@@ -193,7 +195,7 @@ export abstract class BaseAgent<TInput = unknown, TOutput = unknown> {
           task.id,
           'task',
           { taskId: task.id, agentId: this.id, result },
-          { correlationId: task.context.correlationId }
+          { correlationId: task.context?.correlationId }
         );
 
         this.setStatus('idle');
@@ -224,7 +226,7 @@ export abstract class BaseAgent<TInput = unknown, TOutput = unknown> {
           task.id,
           'task',
           { taskId: task.id, agentId: this.id, error: (error as Error).message },
-          { correlationId: task.context.correlationId }
+          { correlationId: task.context?.correlationId }
         );
 
         this.setStatus('idle');
@@ -370,6 +372,7 @@ export abstract class BaseAgent<TInput = unknown, TOutput = unknown> {
       type: taskType,
       priority: 'normal',
       status: 'pending',
+      payload: input,
       input,
       context: {
         correlationId: context.correlationId ?? uuidv4(),
@@ -389,7 +392,7 @@ export abstract class BaseAgent<TInput = unknown, TOutput = unknown> {
       task.id,
       'task',
       { taskId: task.id, targetAgent: agentId, type: taskType },
-      { correlationId: task.context.correlationId }
+      { correlationId: task.context?.correlationId }
     );
 
     // Wait for task completion
@@ -500,6 +503,7 @@ export function createTask<TInput, TOutput = unknown>(
     type,
     priority: options.priority ?? 'normal',
     status: 'pending',
+    payload: input,
     input,
     context: {
       correlationId: uuidv4(),

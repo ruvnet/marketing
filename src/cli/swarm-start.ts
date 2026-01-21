@@ -54,7 +54,7 @@ async function main() {
     // Keep process running
     await new Promise(() => {});
   } catch (error) {
-    logger.error('Failed to start swarm', { error });
+    logger.error('Failed to start swarm', error instanceof Error ? error : new Error(String(error)));
     console.error('❌ Failed to start swarm:', error);
     process.exit(1);
   }

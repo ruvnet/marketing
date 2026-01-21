@@ -5,29 +5,42 @@
  * @packageDocumentation
  */
 
-// Core Infrastructure
-export * from './core';
-
-// Type Definitions
+// Type Definitions (export first to establish base types)
 export * from './types';
 
-// All 15 Agents
-export * from './agents';
+// Core Infrastructure
+export { EventBus, getEventBus, resetEventBus } from './core/event-bus';
+export { StateManager, getStateManager, resetStateManager } from './core/state-manager';
+export { logger, createLogger, createAgentLogger, createTaskLogger } from './core/logger';
 
-// Swarm Coordinator
-export * from './swarm';
+// Swarm Coordinator (primary interface)
+export {
+  SwarmCoordinator,
+  SwarmConfig,
+  SwarmStatus,
+  SwarmMetrics,
+  getSwarmCoordinator,
+  resetSwarmCoordinator,
+} from './swarm';
 
-// Domain Services
-export * from './services';
+// Base agent for extension
+export { BaseAgent, createTask } from './agents/base-agent';
 
-// GCP Integrations
-export * from './integrations';
+// Domain Services (namespaced to avoid conflicts)
+export { CampaignService, getCampaignService } from './services/campaign-service';
+export { CreativeService, getCreativeService } from './services/creative-service';
+export { AttributionService, getAttributionService } from './services/attribution-service';
+export { AnalyticsService, getAnalyticsService } from './services/analytics-service';
 
 // Security utilities
-export * from './security';
+export { validateCampaignInput, sanitizeHtml, sanitizeSqlIdentifier } from './security/input-validator';
+export { SecretsManager, createSecretsManager, SecretNames } from './security/secrets-manager';
+export { AuditLogger, getAuditLogger } from './security/audit-logger';
 
 // Performance utilities
-export * from './performance';
+export { LRUCache, TieredCache } from './performance/cache';
+export { ConnectionPool, Connection } from './performance/connection-pool';
+export { AutoBatcher, ParallelBatchExecutor } from './performance/batch-processor';
 
 // Convenience function to start the swarm
 export async function startMarketingSwarm(

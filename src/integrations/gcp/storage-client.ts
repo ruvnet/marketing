@@ -3,6 +3,7 @@
  * Handles object storage operations for assets and data files
  */
 
+import { createHash } from 'node:crypto';
 import { createLogger, Logger } from '../../core/logger';
 
 export interface StorageConfig {
@@ -289,17 +290,28 @@ export class StorageClient {
 
   /**
    * Generate a signed URL
+   *
+   * This stub intentionally throws in every environment. Signed URLs require
+   * a real service-account private key available only at runtime (via GCP
+   * Secret Manager or Workload Identity). Returning a base64-encoded fake
+   * "signature" would give callers a URL that appears valid but carries no
+   * cryptographic guarantee — any party that inspected the URL could forge
+   * additional signed URLs for arbitrary objects.
+   *
+   * In production wire this to @google-cloud/storage:
+   *   const [url] = await file.getSignedUrl({ action, expires, contentType });
+   *   return url;
    */
   async getSignedUrl(
-    bucketName: string,
-    objectName: string,
-    options: SignedUrlOptions
+    _bucketName: string,
+    _objectName: string,
+    _options: SignedUrlOptions
   ): Promise<string> {
     this.ensureConnected();
-
-    // Mock implementation - in production, use actual signing
-    const signature = Buffer.from(`${bucketName}/${objectName}/${options.expires.getTime()}`).toString('base64');
-    return `https://storage.googleapis.com/${bucketName}/${objectName}?signature=${signature}&expires=${options.expires.getTime()}`;
+    throw new Error(
+      'getSignedUrl requires a production @google-cloud/storage client with valid service-account credentials. ' +
+      'Replace this stub with the real implementation before calling getSignedUrl.'
+    );
   }
 
   /**
@@ -323,15 +335,13 @@ export class StorageClient {
   }
 
   /**
-   * Generate a simple hash (mock)
+   * Generate a SHA-256 digest of the supplied buffer.
+   * Used to populate the md5Hash / crc32c fields on StorageObject responses
+   * so that integrity checks performed by callers are not silently bypassed
+   * by a collision-prone integer hash.
    */
   private generateHash(data: Buffer): string {
-    let hash = 0;
-    for (let i = 0; i < data.length; i++) {
-      hash = ((hash << 5) - hash) + data[i];
-      hash |= 0;
-    }
-    return Math.abs(hash).toString(16);
+    return createHash('sha256').update(data).digest('hex');
   }
 
   /**

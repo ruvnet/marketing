@@ -206,12 +206,14 @@ export function detectInjectionPatterns(input: string): boolean {
     /(--|#|\/\*|\*\/)/,
     /('|")\s*(OR|AND)\s*('|"|\d)/i,
 
-    // Command injection patterns
-    /[;&|`$()]/,
-    /\b(cat|ls|rm|chmod|chown|wget|curl|bash|sh)\b/i,
+    // Command injection patterns — require shell metacharacters in sequence
+    // to avoid false positives on legitimate URL query strings
+    /[;&|`]\s*\w/,
+    /\$\{[^}]*\}/,
+    /\b(cat|ls|rm|chmod|chown|wget|curl|bash|sh)\s+/i,
 
     // Path traversal patterns
-    /\.\.[\/\\]/,
+    /\.\.[/\\]/,
 
     // Script injection patterns
     /<script[\s>]/i,
@@ -229,10 +231,18 @@ export class RateLimiter {
   private readonly requests: Map<string, number[]> = new Map();
   private readonly maxRequests: number;
   private readonly windowMs: number;
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(maxRequests: number, windowMs: number) {
     this.maxRequests = maxRequests;
     this.windowMs = windowMs;
+    // Periodically evict keys whose entire request window has expired to
+    // prevent unbounded Map growth under high-cardinality key spaces.
+    this.cleanupTimer = setInterval(() => this.evictExpiredKeys(), windowMs * 2);
+    // Allow the Node.js process to exit even if this timer is still running.
+    if (this.cleanupTimer.unref) {
+      this.cleanupTimer.unref();
+    }
   }
 
   isAllowed(key: string): boolean {
@@ -246,6 +256,8 @@ export class RateLimiter {
     const validRequests = requests.filter((time) => time > windowStart);
 
     if (validRequests.length >= this.maxRequests) {
+      // Persist the pruned list so it is ready for the next check.
+      this.requests.set(key, validRequests);
       return false;
     }
 
@@ -266,6 +278,24 @@ export class RateLimiter {
 
   reset(key: string): void {
     this.requests.delete(key);
+  }
+
+  /** Remove all keys that have no requests within the current window. */
+  private evictExpiredKeys(): void {
+    const windowStart = Date.now() - this.windowMs;
+    for (const [key, timestamps] of this.requests) {
+      if (timestamps.every((t) => t <= windowStart)) {
+        this.requests.delete(key);
+      }
+    }
+  }
+
+  /** Stop the background cleanup timer. */
+  destroy(): void {
+    if (this.cleanupTimer !== null) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
   }
 }
 
